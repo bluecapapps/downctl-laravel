@@ -1,0 +1,43 @@
+{
+    "name": "bluecapapps/downctl-laravel",
+    "description": "Laravel integration for the Downctl error and metrics reporting API.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "bluecapapps/downctl-php": "dev-main",
+        "illuminate/contracts": "^10.0|^11.0|^12.0",
+        "illuminate/support": "^10.0|^11.0|^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "pestphp/pest": "^3.0",
+        "pestphp/pest-plugin-laravel": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Bluecapapps\\DownctlLaravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Bluecapapps\\DownctlLaravel\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Bluecapapps\\DownctlLaravel\\DownctlServiceProvider"
+            ],
+            "aliases": {
+                "Downctl": "Bluecapapps\\DownctlLaravel\\Facades\\Downctl"
+            }
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "prefer-stable": true
+}
