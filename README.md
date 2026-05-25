@@ -5,7 +5,7 @@ Laravel integration for the Downctl error and metrics reporting API. It adds aut
 ## Requirements
 
 - PHP 8.2+
-- Laravel 10, 11, or 12
+- Laravel 10, 11, 12, or 13
 - `curl` extension
 
 ## Installation

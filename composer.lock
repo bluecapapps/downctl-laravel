@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1b5c03085d5207d07700eb3cd66d4fbd",
+    "content-hash": "af1349537fdb01379376a3f1cc587cd3",
     "packages": [
         {
             "name": "bluecapapps/downctl-php",
