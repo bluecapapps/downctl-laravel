@@ -148,6 +148,122 @@ When enabled, the `CaptureLoggedError` listener dispatches a `SendDownctlReport`
 
 You must have a working queue driver configured. The `sync` driver sends reports immediately, the same as `DOWNCTL_QUEUE=false`.
 
+## Cron Monitoring
+
+Cron monitoring lets Downctl alert you when a scheduled job misses its expected window, takes too long, or exits with an error. Each monitor has a unique ping token; your job hits that URL to prove it ran.
+
+### 1. Create a monitor in Downctl
+
+Open your site in Downctl, navigate to **Cron monitors**, and add a monitor. Set the schedule (cron expression or a simple minute frequency) and a grace period. Copy the ping token shown on the monitor card.
+
+Monitor ping tokens are credentials. Store them in `.env` rather than writing them directly in `routes/console.php`:
+
+```ini
+DOWNCTL_REPORTS_DAILY_MONITOR_TOKEN=a1b2c3d4e5f6...
+DOWNCTL_CACHE_PRUNE_MONITOR_TOKEN=x7y8z9...
+```
+
+Expose the values through a Laravel config file, such as `config/downctl.php`, so they continue to work when configuration is cached:
+
+```php
+'monitors' => [
+    'reports_daily' => env('DOWNCTL_REPORTS_DAILY_MONITOR_TOKEN'),
+    'cache_prune' => env('DOWNCTL_CACHE_PRUNE_MONITOR_TOKEN'),
+],
+```
+
+### 2. Add the Schedule macro
+
+In your `routes/console.php`, chain `->cronMonitor()` onto each scheduled task using the configured token:
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('reports:daily')
+    ->dailyAt('06:00')
+    ->cronMonitor(config('downctl.monitors.reports_daily'));
+
+Schedule::command('cache:prune')
+    ->hourly()
+    ->cronMonitor(config('downctl.monitors.cache_prune'));
+```
+
+The macro automatically:
+
+- Pings `/started` immediately before the task runs.
+- Pings `/finished` (with the measured runtime in seconds) after a successful run.
+- Pings `/failed` if the command exits with a non-zero code.
+
+No other changes are required. Downctl updates the monitor status in real time and opens an alert incident if a ping does not arrive within the configured grace period.
+
+### 3. Verify your configuration
+
+```bash
+php artisan downctl:crons:sync
+```
+
+This lists every scheduled task that has `->cronMonitor()` applied and shows the ping URL it will call:
+
+```
++---------------------+-------------+----------------------------------------------------------+
+| Task                | Schedule    | Ping URL                                                 |
++---------------------+-------------+----------------------------------------------------------+
+| reports:daily       | 0 6 * * *   | https://downctl.com/ping/cron/a1b2c3d4e5f6...           |
+| cache:prune         | 0 * * * *   | https://downctl.com/ping/cron/x7y8z9...                 |
++---------------------+-------------+----------------------------------------------------------+
+```
+
+### Manual pinging
+
+For jobs that run outside the Laravel scheduler (queue workers, shell scripts, external cron jobs), ping the URLs directly using the Facade or client:
+
+```php
+use Bluecapapps\DownctlLaravel\Facades\Downctl;
+
+// Simple heartbeat — marks the monitor as healthy
+Downctl::pingCron('your-token');
+
+// Lifecycle pings with optional metadata
+Downctl::pingCronStarted('your-token');
+
+Downctl::pingCronFinished('your-token', [
+    'runtime'     => 12.4,  // seconds
+    'memory'      => 52428800,  // bytes
+]);
+
+Downctl::pingCronFailed('your-token', [
+    'exit_code'       => 1,
+    'failure_message' => 'Connection to database timed out',
+]);
+```
+
+Ping URLs do not require the API key; the token in the URL is the credential. You can also call them with a plain `curl` from a shell script:
+
+```bash
+# Simple ping
+curl -s "https://downctl.com/ping/cron/your-token"
+
+# With lifecycle and metadata
+curl -s "https://downctl.com/ping/cron/your-token/started"
+curl -s -X POST "https://downctl.com/ping/cron/your-token/finished" \
+     -H "Content-Type: application/json" \
+     -d '{"runtime": 4.2, "exit_code": 0}'
+curl -s -X POST "https://downctl.com/ping/cron/your-token/failed" \
+     -H "Content-Type: application/json" \
+     -d '{"exit_code": 1, "failure_message": "Unexpected error"}'
+```
+
+### Accepted ping metadata
+
+| Field | Type | Description |
+|---|---|---|
+| `runtime` | float | Job duration in seconds |
+| `memory` | int | Peak memory usage in bytes |
+| `exit_code` | int | Process exit code (non-zero promotes a `/finished` ping to `/failed`) |
+| `failure_message` | string | Human-readable failure reason (max 255 chars) |
+
+All fields are optional. A non-zero `exit_code` sent to any endpoint is always treated as a failure.
+
 ## Troubleshooting
 
 ### `downctl:test` reports "Health check failed"

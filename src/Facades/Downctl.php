@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Facade;
  * @method static void report(string $message, string $level = 'error', ?string $stackTrace = null, ?string $url = null, array $context = [])
  * @method static void reportMetrics(MetricsPayload $metrics)
  * @method static bool ping()
+ * @method static void pingCron(string $token, array $metadata = [])
+ * @method static void pingCronStarted(string $token, array $metadata = [])
+ * @method static void pingCronFinished(string $token, array $metadata = [])
+ * @method static void pingCronFailed(string $token, array $metadata = [])
  *
  * @see \Bluecapapps\DownctlLaravel\DownctlClient
  */

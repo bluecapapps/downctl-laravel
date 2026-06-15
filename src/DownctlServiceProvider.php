@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Bluecapapps\DownctlLaravel;
 
 use Bluecapapps\Downctl\Config;
+use Bluecapapps\DownctlLaravel\Commands\DownctlCronsSyncCommand;
 use Bluecapapps\DownctlLaravel\Commands\DownctlTestCommand;
 use Bluecapapps\DownctlLaravel\Listeners\CaptureLoggedError;
 use Bluecapapps\DownctlLaravel\Support\ContextRedactor;
+use Bluecapapps\DownctlLaravel\Support\DownctlCronRegistry;
+use Illuminate\Console\Scheduling\Event;
 use Illuminate\Log\Events\MessageLogged;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\ServiceProvider;
 
 class DownctlServiceProvider extends ServiceProvider
@@ -39,6 +42,8 @@ class DownctlServiceProvider extends ServiceProvider
             enabled: (bool) config('downctl.redact_context', true),
             maxDepth: (int) config('downctl.max_context_depth', 8),
         ));
+
+        $this->app->singleton(DownctlCronRegistry::class);
     }
 
     public function boot(): void
@@ -48,10 +53,14 @@ class DownctlServiceProvider extends ServiceProvider
                 __DIR__.'/../config/downctl.php' => config_path('downctl.php'),
             ], 'downctl-config');
 
-            $this->commands([DownctlTestCommand::class]);
+            $this->commands([
+                DownctlTestCommand::class,
+                DownctlCronsSyncCommand::class,
+            ]);
         }
 
         $this->registerLogListener();
+        $this->registerScheduleMacro();
     }
 
     private function registerLogListener(): void
@@ -62,6 +71,32 @@ class DownctlServiceProvider extends ServiceProvider
             return;
         }
 
-        Event::listen(MessageLogged::class, CaptureLoggedError::class);
+        EventFacade::listen(MessageLogged::class, CaptureLoggedError::class);
+    }
+
+    private function registerScheduleMacro(): void
+    {
+        Event::macro('cronMonitor', function (string $token): static {
+            /** @var Event $this */
+            app(DownctlCronRegistry::class)->register(spl_object_hash($this), $token, $this);
+
+            $startTime = null;
+
+            $this->before(function () use ($token, &$startTime): void {
+                $startTime = microtime(true);
+                app(DownctlClient::class)->pingCronStarted($token);
+            });
+
+            $this->onSuccess(function () use ($token, &$startTime): void {
+                $metadata = $startTime !== null ? ['runtime' => round(microtime(true) - $startTime, 4)] : [];
+                app(DownctlClient::class)->pingCronFinished($token, $metadata);
+            });
+
+            $this->onFailure(function () use ($token): void {
+                app(DownctlClient::class)->pingCronFailed($token);
+            });
+
+            return $this;
+        });
     }
 }
