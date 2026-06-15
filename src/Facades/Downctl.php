@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static void pingCronStarted(string $token, array $metadata = [])
  * @method static void pingCronFinished(string $token, array $metadata = [])
  * @method static void pingCronFailed(string $token, array $metadata = [])
+ * @method static array<string, string> syncCronMonitors(array $monitors)
  *
  * @see \Bluecapapps\DownctlLaravel\DownctlClient
  */

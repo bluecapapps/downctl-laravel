@@ -10,6 +10,7 @@ use Bluecapapps\DownctlLaravel\Commands\DownctlTestCommand;
 use Bluecapapps\DownctlLaravel\Listeners\CaptureLoggedError;
 use Bluecapapps\DownctlLaravel\Support\ContextRedactor;
 use Bluecapapps\DownctlLaravel\Support\DownctlCronRegistry;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Event as EventFacade;
@@ -61,6 +62,52 @@ class DownctlServiceProvider extends ServiceProvider
 
         $this->registerLogListener();
         $this->registerScheduleMacro();
+        $this->registerCronAutoApply();
+    }
+
+    private function registerCronAutoApply(): void
+    {
+        EventFacade::listen(CommandStarting::class, function (CommandStarting $event): void {
+            if (! in_array($event->command, ['schedule:run', 'schedule:work'], strict: true)) {
+                return;
+            }
+
+            $path = filled(config('downctl.cron_token_path'))
+                ? config('downctl.cron_token_path')
+                : storage_path('app/downctl-crons.json');
+
+            if (! file_exists($path)) {
+                return;
+            }
+
+            $stored  = json_decode(file_get_contents($path), associative: true);
+            $tokens  = $stored['monitors'] ?? [];
+
+            if ($tokens === []) {
+                return;
+            }
+
+            /** @var \Illuminate\Console\Scheduling\Schedule $schedule */
+            $schedule = $this->app->make(\Illuminate\Console\Scheduling\Schedule::class);
+            $registry = $this->app->make(DownctlCronRegistry::class);
+
+            $alreadyRegistered = array_map(
+                fn ($entry) => spl_object_hash($entry['event']),
+                $registry->all(),
+            );
+
+            foreach ($schedule->events() as $scheduleEvent) {
+                if (in_array(spl_object_hash($scheduleEvent), $alreadyRegistered, strict: true)) {
+                    continue;
+                }
+
+                $name = $scheduleEvent->description ?: $scheduleEvent->getSummaryForDisplay();
+
+                if (isset($tokens[$name])) {
+                    $scheduleEvent->cronMonitor($tokens[$name]);
+                }
+            }
+        });
     }
 
     private function registerLogListener(): void

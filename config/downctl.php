@@ -49,6 +49,20 @@ return [
     'max_context_depth' => 8,
 
     /*
+     | How many missed runs before an alert is raised for a cron monitor.
+     | Used by downctl:crons:sync to compute grace_time_in_minutes automatically.
+     | Example: a job that runs hourly with missed_runs=2 gets a 120-minute grace period.
+     */
+    'cron_missed_runs_before_alert' => env('DOWNCTL_CRON_MISSED_RUNS', 2),
+
+    /*
+     | Where downctl:crons:sync writes the ping token file.
+     | The DownctlServiceProvider reads this file to auto-apply ->cronMonitor() at runtime.
+     | Defaults to storage/app/downctl-crons.json when null.
+     */
+    'cron_token_path' => env('DOWNCTL_CRON_TOKEN_PATH', null),
+
+    /*
      | Context keys redacted case-insensitively at any nesting level.
      */
     'redacted_keys' => [
